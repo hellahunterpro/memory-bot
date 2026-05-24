@@ -356,3 +356,89 @@ def list_story_people(story_id: int, db: Session = Depends(get_db)):
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
     return story.people
+
+
+# ===== ПОИСК =====
+
+from pydantic import BaseModel
+
+
+class SearchResult(BaseModel):
+    """Универсальный результат поиска"""
+    type: str  # "person" / "event" / "story" / "note"
+    id: int
+    title: str  # имя/название
+    snippet: str  # фрагмент с совпадением
+    context: dict  # дополнительная инфа (например person_id для notes)
+
+
+@app.get("/search", response_model=List[SearchResult])
+def search(q: str, db: Session = Depends(get_db)):
+    """
+    Поиск по всем сущностям. Минимум 2 символа.
+    """
+    if len(q.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
+    
+    pattern = f"%{q}%"
+    results = []
+    
+    # Поиск по людям (имя, контекст)
+    people = db.query(Person).filter(
+        (Person.name.ilike(pattern)) | (Person.context.ilike(pattern))
+    ).all()
+    for p in people:
+        snippet = p.context if q.lower() in (p.context or "").lower() else p.name
+        results.append(SearchResult(
+            type="person",
+            id=p.id,
+            title=p.name,
+            snippet=snippet[:200],
+            context={"category": p.category}
+        ))
+    
+    # Поиск по событиям (название, описание, место)
+    events = db.query(Event).filter(
+        (Event.title.ilike(pattern)) | 
+        (Event.description.ilike(pattern)) | 
+        (Event.location.ilike(pattern))
+    ).all()
+    for e in events:
+        snippet = e.description if q.lower() in (e.description or "").lower() else e.title
+        results.append(SearchResult(
+            type="event",
+            id=e.id,
+            title=e.title,
+            snippet=snippet[:200],
+            context={"event_type": e.event_type, "occurred_at": e.occurred_at.isoformat()}
+        ))
+    
+    # Поиск по историям (название, описание)
+    stories = db.query(Story).filter(
+        (Story.title.ilike(pattern)) | (Story.description.ilike(pattern))
+    ).all()
+    for s in stories:
+        snippet = s.description if q.lower() in (s.description or "").lower() else s.title
+        results.append(SearchResult(
+            type="story",
+            id=s.id,
+            title=s.title,
+            snippet=snippet[:200],
+            context={"status": s.status, "icon": s.icon}
+        ))
+    
+    # Поиск по заметкам (содержимое)
+    notes = db.query(Note).filter(Note.content.ilike(pattern)).all()
+    for n in notes:
+        # Для заметок нужно подтянуть имя человека к которому она относится
+        person = db.query(Person).filter(Person.id == n.person_id).first()
+        person_name = person.name if person else "Неизвестно"
+        results.append(SearchResult(
+            type="note",
+            id=n.id,
+            title=f"Заметка про {person_name}",
+            snippet=n.content[:200],
+            context={"person_id": n.person_id, "person_name": person_name}
+        ))
+    
+    return results
