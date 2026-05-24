@@ -59,6 +59,7 @@ class EventOut(BaseModel):
     event_type: str
     location: str
     occurred_at: datetime
+    photos: str = "[]"
     created_at: datetime
 
 

@@ -56,6 +56,7 @@ class Event(Base):
     event_type = Column(String(50), default="meeting")
     location = Column(String(300), default="")
     occurred_at = Column(DateTime, default=datetime.utcnow)
+    photos = Column(Text, default="[]")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     people = relationship("Person", secondary=event_people, back_populates="events")

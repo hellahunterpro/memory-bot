@@ -442,3 +442,86 @@ def search(q: str, db: Session = Depends(get_db)):
         ))
     
     return results
+
+
+# ===== ФОТО =====
+
+import os
+import uuid
+import json as json_lib
+from pathlib import Path
+from fastapi import UploadFile, File
+
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/photos/upload")
+async def upload_photo(file: UploadFile = File(...)):
+    """Загрузить фото. Возвращает URL по которому его можно получить."""
+    # Проверка расширения
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {ext} not allowed. Allowed: {ALLOWED_EXTENSIONS}"
+        )
+    
+    # Читаем файл и проверяем размер
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Max size: {MAX_FILE_SIZE // 1024 // 1024} MB"
+        )
+    
+    # Генерируем уникальное имя
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = UPLOAD_DIR / filename
+    
+    # Сохраняем
+    with open(filepath, "wb") as f:
+        f.write(contents)
+    
+    # Возвращаем URL по которому фото будет доступно
+    return {
+        "filename": filename,
+        "url": f"/uploads/{filename}",
+        "size": len(contents)
+    }
+
+
+@app.post("/events/{event_id}/photos", response_model=EventOut)
+def attach_photo_to_event(event_id: int, photo_url: str, db: Session = Depends(get_db)):
+    """Привязать загруженное фото к событию (передать его URL как параметр)"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    photos = json_lib.loads(event.photos or "[]")
+    if photo_url not in photos:
+        photos.append(photo_url)
+        event.photos = json_lib.dumps(photos)
+        db.commit()
+        db.refresh(event)
+    
+    return event
+
+
+@app.delete("/events/{event_id}/photos", response_model=EventOut)
+def detach_photo_from_event(event_id: int, photo_url: str, db: Session = Depends(get_db)):
+    """Открепить фото от события"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    photos = json_lib.loads(event.photos or "[]")
+    if photo_url in photos:
+        photos.remove(photo_url)
+        event.photos = json_lib.dumps(photos)
+        db.commit()
+        db.refresh(event)
+    
+    return event
