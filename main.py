@@ -198,3 +198,44 @@ def delete_story(story_id: int, db: Session = Depends(get_db)):
 
     db.delete(story)
     db.commit()
+
+
+# ===== ЗАМЕТКИ =====
+
+from models import Note
+from schemas import NoteCreate, NoteOut
+
+
+@app.get("/people/{person_id}/notes", response_model=List[NoteOut])
+def list_person_notes(person_id: int, db: Session = Depends(get_db)):
+    """Получить все заметки про человека (новые сверху)"""
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    
+    return db.query(Note).filter(Note.person_id == person_id).order_by(Note.created_at.desc()).all()
+
+
+@app.post("/people/{person_id}/notes", response_model=NoteOut, status_code=201)
+def create_note(person_id: int, data: NoteCreate, db: Session = Depends(get_db)):
+    """Добавить заметку про человека"""
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    
+    note = Note(person_id=person_id, **data.model_dump())
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+@app.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: int, db: Session = Depends(get_db)):
+    """Удалить заметку"""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    db.delete(note)
+    db.commit()

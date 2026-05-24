@@ -90,3 +90,20 @@ class StoryOut(BaseModel):
     color: str
     status: str
     created_at: datetime
+
+
+# ===== ЗАМЕТКИ =====
+
+class NoteCreate(BaseModel):
+    content: str
+    voice_url: str = ""
+
+
+class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    person_id: int
+    content: str
+    voice_url: str
+    created_at: datetime
