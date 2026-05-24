@@ -239,3 +239,120 @@ def delete_note(note_id: int, db: Session = Depends(get_db)):
     
     db.delete(note)
     db.commit()
+
+
+# ===== СВЯЗИ: ЛЮДИ ↔ СОБЫТИЯ =====
+
+@app.post("/events/{event_id}/people/{person_id}", status_code=204)
+def add_person_to_event(event_id: int, person_id: int, db: Session = Depends(get_db)):
+    """Добавить человека к событию"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if person not in event.people:
+        event.people.append(person)
+        db.commit()
+
+
+@app.delete("/events/{event_id}/people/{person_id}", status_code=204)
+def remove_person_from_event(event_id: int, person_id: int, db: Session = Depends(get_db)):
+    """Убрать человека из события"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if person in event.people:
+        event.people.remove(person)
+        db.commit()
+
+
+@app.get("/events/{event_id}/people", response_model=List[PersonOut])
+def list_event_people(event_id: int, db: Session = Depends(get_db)):
+    """Список людей участвовавших в событии"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event.people
+
+
+# ===== СВЯЗИ: СОБЫТИЯ ↔ ИСТОРИИ =====
+
+@app.post("/stories/{story_id}/events/{event_id}", status_code=204)
+def add_event_to_story(story_id: int, event_id: int, db: Session = Depends(get_db)):
+    """Добавить событие к истории"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event not in story.events:
+        story.events.append(event)
+        db.commit()
+
+
+@app.delete("/stories/{story_id}/events/{event_id}", status_code=204)
+def remove_event_from_story(story_id: int, event_id: int, db: Session = Depends(get_db)):
+    """Убрать событие из истории"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event in story.events:
+        story.events.remove(event)
+        db.commit()
+
+
+@app.get("/stories/{story_id}/events", response_model=List[EventOut])
+def list_story_events(story_id: int, db: Session = Depends(get_db)):
+    """Хронология событий истории (новые сверху)"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return sorted(story.events, key=lambda e: e.occurred_at, reverse=True)
+
+
+# ===== СВЯЗИ: ЛЮДИ ↔ ИСТОРИИ =====
+
+@app.post("/stories/{story_id}/people/{person_id}", status_code=204)
+def add_person_to_story(story_id: int, person_id: int, db: Session = Depends(get_db)):
+    """Добавить человека к истории"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if person not in story.people:
+        story.people.append(person)
+        db.commit()
+
+
+@app.delete("/stories/{story_id}/people/{person_id}", status_code=204)
+def remove_person_from_story(story_id: int, person_id: int, db: Session = Depends(get_db)):
+    """Убрать человека из истории"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if person in story.people:
+        story.people.remove(person)
+        db.commit()
+
+
+@app.get("/stories/{story_id}/people", response_model=List[PersonOut])
+def list_story_people(story_id: int, db: Session = Depends(get_db)):
+    """Список людей участвующих в истории"""
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return story.people
